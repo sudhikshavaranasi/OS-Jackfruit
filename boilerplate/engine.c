@@ -1,3 +1,4 @@
+
 /*
  * engine.c - Supervised Multi-Container Runtime (User Space)
  *
@@ -47,6 +48,14 @@
 #define LOG_BUFFER_CAPACITY 16
 #define DEFAULT_SOFT_LIMIT (40UL << 20)
 #define DEFAULT_HARD_LIMIT (64UL << 20)
+
+typedef struct {
+	char id[50];
+	pid_t pid;
+}  container_t;
+
+container_t containers[10];
+int container_count = 0;
 
 typedef enum {
     CMD_SUPERVISOR = 0,
@@ -150,7 +159,8 @@ static int parse_mib_flag(const char *flag,
 
     errno = 0;
     mib = strtoul(value, &end, 10);
-    if (errno != 0 || end == value || *end != '\0') {
+    
+if (errno != 0 || end == value || *end != '\0') {
         fprintf(stderr, "Invalid value for %s: %s\n", flag, value);
         return -1;
     }
@@ -387,45 +397,6 @@ int unregister_from_monitor(int monitor_fd, const char *container_id, pid_t host
  *   - accept control requests and update container state
  *   - reap children and respond to signals
  */
-static int run_supervisor(const char *rootfs)
-{
-    supervisor_ctx_t ctx;
-    int rc;
-
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.server_fd = -1;
-    ctx.monitor_fd = -1;
-
-    rc = pthread_mutex_init(&ctx.metadata_lock, NULL);
-    if (rc != 0) {
-        errno = rc;
-        perror("pthread_mutex_init");
-        return 1;
-    }
-
-    rc = bounded_buffer_init(&ctx.log_buffer);
-    if (rc != 0) {
-        errno = rc;
-        perror("bounded_buffer_init");
-        pthread_mutex_destroy(&ctx.metadata_lock);
-        return 1;
-    }
-
-    /*
-     * TODO:
-     *   1) open /dev/container_monitor
-     *   2) create the control socket / FIFO / shared-memory channel
-     *   3) install SIGCHLD / SIGINT / SIGTERM handling
-     *   4) spawn the logger thread
-     *   5) enter the supervisor event loop
-     */
-    fprintf(stderr, "Supervisor mode not implemented yet for base-rootfs: %s\n", rootfs);
-
-    bounded_buffer_begin_shutdown(&ctx.log_buffer);
-    bounded_buffer_destroy(&ctx.log_buffer);
-    pthread_mutex_destroy(&ctx.metadata_lock);
-    return 1;
-}
 
 /*
  * TODO:
@@ -437,10 +408,37 @@ static int run_supervisor(const char *rootfs)
  */
 static int send_control_request(const control_request_t *req)
 {
-    (void)req;
-    fprintf(stderr, "Control-plane client path not implemented.\n");
-    return 1;
+	(void)req;
+	pid_t pid = fork();
+
+	if (pid==0) {
+		write(1,"before chroot\n",15);
+		if (chroot("./rootfs-base")!=0) {
+			perror("chroot failed");
+			exit(1);
+		}
+		write(1,"after chroot\n",14);
+		chdir("/");
+		write(1,"before exec\n",13);
+		execlp("/bin/busybox", "busybox", "pwd",  NULL);
+		perror("exec failed");
+		exit(1);
+	} else if (pid > 0) {
+		printf("Started container with PID %d\n",  pid);
+		FILE *f = fopen("containers.txt", "a");
+		if (f!=NULL) {
+			fprintf(f, "container %d\n", pid);
+			fclose(f);
+		} else {
+			perror("file open failed");
+		}
+	} else {
+		perror("fork failed");
+		return 1;
+	}
+	return 0;
 }
+	
 
 static int cmd_start(int argc, char *argv[])
 {
@@ -545,6 +543,14 @@ static int cmd_stop(int argc, char *argv[])
     return send_control_request(&req);
 }
 
+static int run_supervisor(const char *rootfs) {
+	printf("Supervisor started with rootfs: %s\n", rootfs);
+	
+	while (1) {
+		sleep(1);}
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
     if (argc < 2) {
@@ -566,10 +572,22 @@ int main(int argc, char *argv[])
     if (strcmp(argv[1], "run") == 0)
         return cmd_run(argc, argv);
 
-    if (strcmp(argv[1], "ps") == 0)
-        return cmd_ps();
+    if (strcmp(argv[1], "ps") == 0) {
+	FILE *f = fopen("containers.txt", "r");
+	
+	if (f == NULL) {
+		printf("no containers found.\n");
+		return 0;}
+	char id[50];
+	int pid;
 
-    if (strcmp(argv[1], "logs") == 0)
+	while (fscanf(f, "%s %d", id, &pid)!=EOF) {
+		printf("%s\t%d\n", id, pid);
+		}
+	fclose(f);
+	return 0;
+	}
+        if (strcmp(argv[1], "logs") == 0)
         return cmd_logs(argc, argv);
 
     if (strcmp(argv[1], "stop") == 0)
