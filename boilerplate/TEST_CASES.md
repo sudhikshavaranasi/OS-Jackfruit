@@ -54,3 +54,46 @@ screenshot:
 
 explanation:
 shows communication between CLI and supervisor via UNIX domain sockets.
+
+
+## Test Case 5: Logging pipeline
+
+command:
+ls logs
+cat logs/demo.log
+
+screenshot:
+![logs](screenshots/logs.png)
+
+explanation:
+demonstrates producer-consumer logging using a bounded buffer and logging thread.
+
+
+## Test Case 6: Monitor registration
+
+command:
+sudo dmesg -w
+./program start c1 rootfs "pwd"
+
+screenshot:
+![monitor output](screenshots/dmesg.png)
+
+explanation:
+confirms that containers are registered with the kernel monitor via ioctl and logged in kernel space.
+
+
+
+## Test Case 7: Clean teardown
+
+command:
+Ctrl + C (on supervisor)
+
+output:
+Shutting down...
+Supervisor exited cleanly
+
+screenshot:
+![shutdown](screenshots/supervisor.png)
+
+explanation:
+ensures proper cleanup of processes, threads, and resources with no zombies.
