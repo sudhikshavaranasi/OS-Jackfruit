@@ -111,10 +111,10 @@ Confirms process runs inside isolated root filesystem using chroot.
 ```bash
 sudo ./engine start alpha ./rootfs-base /bin/ls
 ```
-screenshot:
+**Screenshot:**
 ![ls output](screenshots/ls_output.png)
 
-explanation:
+**Explanation:**
 Confirms commands run inside container
 
 
